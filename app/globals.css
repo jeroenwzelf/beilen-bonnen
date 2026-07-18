@@ -1,0 +1,97 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* Direct color values — no var() chaining in @theme inline */
+  --color-background:          #0a0a0a;
+  --color-foreground:          #e8e8e8;
+  --color-card:                #131313;
+  --color-card-foreground:     #e8e8e8;
+  --color-primary:             #c6ff00;
+  --color-primary-foreground:  #0a0a0a;
+  --color-secondary:           #1c1c1c;
+  --color-secondary-foreground:#e8e8e8;
+  --color-muted:               #1c1c1c;
+  --color-muted-foreground:    #6b6b6b;
+  --color-accent:              #ff2d78;
+  --color-accent-foreground:   #ffffff;
+  --color-border:              #2a2a2a;
+  --color-input:               #1c1c1c;
+  --color-ring:                #c6ff00;
+  --color-destructive:         #ff2d78;
+
+  /* Raw brand colors for direct use */
+  --color-bb-lime:             #c6ff00;
+  --color-bb-magenta:          #ff2d78;
+  --color-bb-black:            #0a0a0a;
+  --color-bb-surface:          #131313;
+  --color-bb-surface-raised:   #1c1c1c;
+  --color-bb-border:           #2a2a2a;
+  --color-bb-offwhite:         #e8e8e8;
+  --color-bb-muted:            #6b6b6b;
+
+  --radius-sm:  0.25rem;
+  --radius-md:  0.375rem;
+  --radius-lg:  0.5rem;
+  --radius-xl:  0.75rem;
+
+  --font-sans: 'Space Grotesk', 'Space Grotesk Fallback', sans-serif;
+  --font-mono: 'Space Mono', 'Space Mono Fallback', monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sans font-bold tracking-tight;
+  }
+
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(0.5);
+  }
+}
+
+/* Receipt tape dashed border */
+.receipt-border {
+  border-top: 2px dashed #2a2a2a;
+}
+
+/* Lime glow button */
+.btn-lime {
+  background: #c6ff00;
+  color: #0a0a0a;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: all 0.15s ease;
+}
+.btn-lime:hover {
+  background: #d4ff1a;
+  box-shadow: 0 0 24px rgba(198, 255, 0, 0.45);
+}
+
+/* Magenta glow button */
+.btn-magenta {
+  background: #ff2d78;
+  color: white;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: all 0.15s ease;
+}
+.btn-magenta:hover {
+  box-shadow: 0 0 24px rgba(255, 45, 120, 0.45);
+}
+
+/* Atonement checkbox glow when active */
+.atonement-active {
+  box-shadow: 0 0 12px rgba(198, 255, 0, 0.5);
+}
