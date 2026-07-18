@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { holidays, people, shoppingDays, receipts, items, atonements } from '@/lib/db/schema'
+import { holidays, people, shoppingDays, receipts, items, atonements, Receipt, Item } from '@/lib/db/schema'
 import { eq, and, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { nanoid } from '@/lib/utils'
@@ -26,6 +26,8 @@ export async function createHoliday(data: {
   const id = nanoid()
   await db.insert(holidays).values({ id, ...data })
   revalidatePath('/')
+
+  log("Created holiday", data)
   return id
 }
 
@@ -42,12 +44,19 @@ export async function addPerson(holidayId: string, name: string) {
   const id = nanoid()
   await db.insert(people).values({ id, holidayId, name })
   revalidatePath(`/holidays/${holidayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, holidayId) })
+  log("Added person", {holiday: holiday?.name, person: name})
   return id
 }
 
 export async function removePerson(holidayId: string, personId: string) {
   await db.delete(people).where(and(eq(people.id, personId), eq(people.holidayId, holidayId)))
   revalidatePath(`/holidays/${holidayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, holidayId) })
+  const person = await db.query.people.findFirst({ where: eq(people.id, personId) })
+  log("Removed person", {holiday: holiday?.name, person: person?.name})
 }
 
 // ─── Shopping Days ────────────────────────────────────────────────────────────
@@ -67,6 +76,9 @@ export async function createShoppingDay(holidayId: string, data: { dayDate: stri
   const id = nanoid()
   await db.insert(shoppingDays).values({ id, holidayId, ...data })
   revalidatePath(`/holidays/${holidayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, holidayId) })
+  log("Created shopping day", {holiday: holiday?.name, day: data.dayDate, label: data.label})
   return id
 }
 
@@ -86,6 +98,10 @@ export async function deleteShoppingDay(dayId: string, holidayId: string) {
   await db.delete(shoppingDays).where(eq(shoppingDays.id, dayId))
   revalidatePath(`/holidays/${holidayId}/days`)
   revalidatePath(`/holidays/${holidayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, holidayId) })
+  const day = await db.query.shoppingDays.findFirst({ where: eq(shoppingDays.id, dayId) })
+  log("Deleted shopping day", {holiday: holiday?.name, day: day?.dayDate, label: day?.label})
 }
 
 // ─── Receipts ────────────────────────────────────────────────────────────────
@@ -200,6 +216,10 @@ export async function createReceipt(data: {
   }
 
   revalidatePath(`/holidays/${data.holidayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, data.holidayId) })
+  const person = await db.query.people.findFirst({ where: eq(people.id, data.paidByPersonId) })
+  log("Created new receipt", {holiday: holiday?.name, person: person?.name, store: data.storeName, items: data.itemsList.length, amount: data.totalAmount})
   return receiptId
 }
 
@@ -212,11 +232,21 @@ export async function deleteReceipt(receiptId: string, holidayId: string, dayId:
   }
   await db.delete(receipts).where(eq(receipts.id, receiptId))
   revalidatePath(`/holidays/${holidayId}/days/${dayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, holidayId) })
+  const receipt = await db.query.receipts.findFirst({ where: eq(receipts.id, receiptId) })
+  const day = await db.query.shoppingDays.findFirst({ where: eq(shoppingDays.id, dayId) })
+  log("Deleted receipt", {holiday: holiday?.name, day: day?.dayDate, receipt: await receiptToString(receipt)})
 }
 
 export async function updateReceiptStore(receiptId: string, storeName: string, holidayId: string, dayId: string) {
   await db.update(receipts).set({ storeName }).where(eq(receipts.id, receiptId))
   revalidatePath(`/holidays/${holidayId}/days/${dayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, holidayId) })
+  const receipt = await db.query.receipts.findFirst({ where: eq(receipts.id, receiptId) })
+  const day = await db.query.shoppingDays.findFirst({ where: eq(shoppingDays.id, dayId) })
+  log("Updated store of receipt to " + storeName, {holiday: holiday?.name, day: day?.dayDate, receipt: await receiptToString(receipt)})
 }
 
 export async function updateReceiptPayer(
@@ -233,6 +263,12 @@ export async function updateReceiptPayer(
     .where(eq(receipts.id, receiptId))
 
   revalidatePath(`/holidays/${holidayId}/days/${dayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, holidayId) })
+  const person = await db.query.people.findFirst({ where: eq(people.id, paidByPersonId) })
+  const receipt = await db.query.receipts.findFirst({ where: eq(receipts.id, receiptId) })
+  const day = await db.query.shoppingDays.findFirst({ where: eq(shoppingDays.id, dayId) })
+  log("Updated payer of receipt to " + person?.name, {holiday: holiday?.name, day: day?.dayDate, receipt: await receiptToString(receipt)})
 }
 
 // ─── Items ────────────────────────────────────────────────────────────────────
@@ -245,9 +281,16 @@ export async function getItemsForReceipt(receiptId: string) {
 }
 
 export async function deleteItem(itemId: string, holidayId: string, dayId: string) {
+  const item = await db.query.items.findFirst({ where: eq(items.id, itemId) })
+
   await db.delete(atonements).where(eq(atonements.itemId, itemId))
   await db.delete(items).where(eq(items.id, itemId))
   revalidatePath(`/holidays/${holidayId}/days/${dayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, holidayId) })
+  const day = await db.query.shoppingDays.findFirst({ where: eq(shoppingDays.id, dayId) })
+  const receipt = await db.query.receipts.findFirst({ where: eq(receipts.id, item!.receiptId) })
+  log("Deleted item", {holiday: holiday?.name, day: day?.dayDate, receipt: await receiptToString(receipt), item: itemToString(item)})
 }
 
 export async function updateItem(
@@ -258,6 +301,12 @@ export async function updateItem(
 ) {
   await db.update(items).set(data).where(eq(items.id, itemId))
   revalidatePath(`/holidays/${holidayId}/days/${dayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, holidayId) })
+  const day = await db.query.shoppingDays.findFirst({ where: eq(shoppingDays.id, dayId) })
+  const item = await db.query.items.findFirst({ where: eq(items.id, itemId) })
+  const receipt = await db.query.receipts.findFirst({ where: eq(receipts.id, item!.receiptId) })
+  log("Updated item", {holiday: holiday?.name, day: day?.dayDate, receipt: await receiptToString(receipt), item: itemToString(item)})
 }
 
 export async function getItemsForDay(dayId: string) {
@@ -332,6 +381,15 @@ export async function updateAtonementCount(
   }
 
   revalidatePath(`/holidays/${holidayId}`)
+
+  const holiday = await db.query.holidays.findFirst({ where: eq(holidays.id, holidayId) })
+  const person = await db.query.people.findFirst({ where: eq(people.id, personId) })
+  const item = await db.query.items.findFirst({ where: eq(items.id, itemId) })
+  const receipt = await db.query.receipts.findFirst({ where: eq(receipts.id, item!.receiptId) })
+  const day = await db.query.shoppingDays.findFirst({ where: eq(shoppingDays.id, receipt!.dayId) })
+
+  log(person?.name + " atoned: " + item?.name + " (" + (count >= 0 ? count : ("-" + count)) + "x)",
+    {holiday: holiday?.name, day: day?.dayDate, receipt: await receiptToString(receipt), item: itemToString(item), person: person?.name, count: count})
 }
 
 // ─── Settlement ───────────────────────────────────────────────────────────────
@@ -447,4 +505,19 @@ export async function getSettlementData(holidayId: string) {
       0,
     ),
   }
+}
+
+// ─── Log helper functions ───────────────────────────────────────────────────────────────
+
+async function receiptToString(receipt: Receipt | undefined) {
+  const person = await db.query.people.findFirst({ where: eq(people.id, receipt!.paidByPersonId) })
+  return receipt?.storeName + " (" + receipt?.totalAmount + ") paid by " + person?.name
+}
+
+function itemToString(item: Item | undefined) {
+  return item?.quantity + "x " + item?.name + " (" + item?.price + ")"
+}
+
+function log(...args: unknown[]) {
+  console.log(`[${new Date().toISOString()}]`, ...args)
 }
